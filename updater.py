@@ -14,24 +14,21 @@ PATH = '/Users/elindstr/bin/chromedriver'
 command = '/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --version'
 VERSION = subprocess.check_output(command, shell=True).decode()
 VERSION = VERSION.split()[-1].strip() 
-print('Chrome version:', VERSION)
 
 ## Get local chrome version (windows)
 # command = 'reg query "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\BLBeacon" /v version'
 # version_info = subprocess.check_output(command, shell=True).decode()
 # VERSION = version_info.split()[-1]
-# print('Chrome version:', VERSION)
 
 ## Get local chrome version (linux)
 # command = "google-chrome --version"
 # VERSION = subprocess.check_output(command, shell=True).decode()
-# print('Chrome version:', VERSION)
 
 # Access JSON API endpoints
 url = 'https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json'
 response = requests.get(url)
 if response.status_code != 200:
-    print("Couldn't connect to JSON versions page.")
+    print("Couldn't connect to chromedriver JSON endpoints page.")
 data = response.json()
 
 # Locate driver download link based on parameters
@@ -47,7 +44,7 @@ for version in data['versions']:
 
 # Download driver to PATH
 if not download_url:
-    print(f"No matching driver found for Chrome version {VERSION}.")
+    print(f"No matching chromedriver found for Chrome version {VERSION}.")
 else:
     response = requests.get(download_url, stream=True)
     response.raise_for_status()
@@ -55,6 +52,6 @@ else:
         for chunk in response.iter_content(chunk_size=8192):
             file.write(chunk)
 
-print(f'Updated driver to {VERSION}.')
+print(f'Updated chromedriver to {VERSION}.')
 
     
