@@ -28,7 +28,7 @@ def get_local_chrome_version(os_type: str) -> str:
         version = subprocess.check_output(command, shell=True).decode().split()[-1].strip()
     else:
         raise ValueError("Unsupported OS type")
-    print(f'Current local chrome version: {version}')
+    print(f'Current local chrome version (full): {version}')
     return version
 
 # Function to convert version string to tuple
@@ -64,8 +64,8 @@ def find_download_url(closest_match: Dict, package: str, platform: str) -> Optio
         print(f"An unexpected error occurred: {e}")
     return None
 
-# Function to extract file from zip archive
-def extract_zip_file(zip_path: str, member_path: str, extract_to: str):
+# Function to extract a specific file from a zip archive
+def extract_specific_file(zip_path: str, member_path: str, extract_to: str):
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             for member in zip_ref.namelist():
@@ -95,8 +95,8 @@ def clean_up(zip_path: str, extracted_folder: str):
     except Exception as e:
         print(f"An unexpected error occurred during cleanup: {e}")
 
-# Main execution
-if __name__ == "__main__":
+# Main execution (for importing as package)
+def update_chromedriver(package: str, platform: str, path: str, os_type: str):
     # Get local Chrome version
     VERSION = get_local_chrome_version(OS)
 
@@ -127,10 +127,13 @@ if __name__ == "__main__":
             print(f'Successfully downloaded chromedriver to {zip_path}')
 
             # Extract the specific file from the downloaded zip file
-            extract_zip_file(zip_path, f'{PACKAGE}-{PLATFORM}/chromedriver', PATH)
+            extract_specific_file(zip_path, f'{PACKAGE}-{PLATFORM}/chromedriver', PATH)
 
             # Clean up
             clean_up(zip_path, os.path.join(PATH, f'{PACKAGE}-{PLATFORM}'))
 
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
+
+def main():
+    update_chromedriver(package=PACKAGE, platform=PLATFORM, path=PATH, os_type=OS)
