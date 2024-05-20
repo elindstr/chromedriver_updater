@@ -1,62 +1,111 @@
-import subprocess, requests
+import os, requests, subprocess, zipfile
+from typing import List, Dict, Optional
 
 # Parameters
 VERSION = ''
 PACKAGE = 'chromedriver'
-OS = 'mac'
-PLATFORM = 'mac-x64'
-PATH = '/Users/elindstr/bin/chromedriver'
-# OS = 'windows'
-# PLATFORM = 'win64'
-# PATH = 'c:\\bin'
+OS = 'windows'
+PLATFORM = 'win64'
+PATH = 'c:\\bin'
+# OS = 'mac'
+# PLATFORM = 'mac-x64'
+# PATH = '/Users/<fill in your username here>/bin/chromedriver'
+# For package and platform types, see https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json
 
-# Get local chrome version (mac)
-command = '/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --version'
-VERSION = subprocess.check_output(command, shell=True).decode()
-VERSION = VERSION.split()[-1].strip() 
-print(f'Current local chrome version (full): {VERSION}')
+# Function to get local Chrome version
+def get_local_chrome_version(os_type: str) -> str:
+    if os_type == 'mac':
+        command = '/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --version'
+        version = subprocess.check_output(command, shell=True).decode().split()[-1].strip()
+    elif os_type == 'windows':
+        command = 'reg query "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\BLBeacon" /v version'
+        version_info = subprocess.check_output(command, shell=True).decode()
+        version = version_info.split()[-1].strip()
+    elif os_type == 'linux':
+        command = "google-chrome --version"
+        version = subprocess.check_output(command, shell=True).decode().split()[-1].strip()
+    else:
+        raise ValueError("Unsupported OS type")
+    print(f'Current local chrome version (full): {version}')
+    return version
 
-VERSIONtop = VERSION.split('.')[0]
-print(f'Current local chrome version (top-level): {VERSIONtop}')
+# Function to convert version string to tuple
+def version_to_tuple(version: str) -> tuple:
+    return tuple(map(int, version.split('.')))
 
-## Get local chrome version (windows)
-# command = 'reg query "HKEY_CURRENT_USER\\Software\\Google\\Chrome\\BLBeacon" /v version'
-# version_info = subprocess.check_output(command, shell=True).decode()
-# VERSION = version_info.split()[-1]
+# Function to find the closest version in JSON data
+def find_closest_version(target_version: str, versions: List[Dict]) -> Dict:
+    target_tuple = version_to_tuple(target_version)
+    closest_match = None
+    closest_diff = None
 
-## Get local chrome version (linux)
-# command = "google-chrome --version"
-# VERSION = subprocess.check_output(command, shell=True).decode()
+    for entry in versions['versions']:
+        version_tuple = version_to_tuple(entry["version"])
+        diff = tuple(abs(t - v) for t, v in zip(target_tuple, version_tuple))
 
-# Access JSON API endpoints
-url = 'https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json'
-response = requests.get(url)
-if response.status_code != 200:
-    print("Couldn't connect to chromedriver JSON endpoints page.")
-data = response.json()
+        if closest_match is None or diff < closest_diff:
+            closest_match = entry
+            closest_diff = diff
 
-# Locate driver download link based on parameters
-download_url = ""
-for version in reversed(data['versions']):
-    if VERSIONtop in version['version'].split('.')[0]:
-        if PACKAGE in version['downloads']:
-            for download in reversed(version['downloads'][PACKAGE]):
-                if download['platform'] == PLATFORM:
-                    download_url = download['url']
-                    break
-    if download_url:
-        break
+    return closest_match
 
-# Download driver to PATH
-if not download_url:
-    print(f"No matching chromedriver found for Chrome version {VERSIONtop}.")
-else:
-    response = requests.get(download_url, stream=True)
-    response.raise_for_status()
-    with open(PATH, 'wb') as file:
-        for chunk in response.iter_content(chunk_size=8192):
-            file.write(chunk)
-    print(f'Updated chromedriver to {VERSIONtop}.')
+# Function to find the download URL based on package and platform
+def find_download_url(closest_match: Dict, package: str, platform: str) -> Optional[str]:
+    try:
+        if package in closest_match['downloads']:
+            for item in closest_match['downloads'][package]:
+                if item['platform'] == platform:
+                    return item['url']
+    except KeyError as e:
+        print(f"Key error: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+    return None
 
+# Function to extract a zip file to a specified directory
+def extract_zip(file_path: str, extract_to: str):
+    try:
+        with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_to)
+            print(f'Sucessfully extracted to {extract_to}')
+    except zipfile.BadZipFile:
+        print("Error: Bad zip file.")
+    except Exception as e:
+        print(f"An unexpected error occurred during extraction: {e}")
 
-    
+# Main execution
+if __name__ == "__main__":
+    # Get local Chrome version
+    VERSION = get_local_chrome_version(OS)
+
+    # Access JSON API endpoints
+    url = 'https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json'
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise ConnectionError("Couldn't connect to chromedriver JSON endpoints page.")
+    data = response.json()
+
+    # Find closest version
+    closest_match = find_closest_version(VERSION, data)
+    print("Closest version available in JSON endpoints page:", closest_match['version'])
+
+    # Locate driver download link
+    download_url = find_download_url(closest_match, PACKAGE, PLATFORM)
+    if not download_url:
+        print(f"No matching downloads found for: Chrome version: {closest_match['version']}; package: {PACKAGE}; platform: {PLATFORM}.")
+    else:
+        try:
+            # Download driver
+            response = requests.get(download_url, stream=True)
+            response.raise_for_status()
+            zip_path = os.path.join(PATH, 'chromedriver.zip')
+            with open(zip_path, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+            print(f'Downloaded chromedriver to {zip_path}')
+
+            # Extract the downloaded zip file
+            extract_zip(zip_path, PATH)
+
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
