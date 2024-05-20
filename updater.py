@@ -1,4 +1,7 @@
-import os, requests, subprocess, zipfile
+import subprocess
+import requests
+import zipfile
+import os
 from typing import List, Dict, Optional
 
 # Parameters
@@ -9,8 +12,7 @@ PLATFORM = 'win64'
 PATH = 'c:\\bin'
 # OS = 'mac'
 # PLATFORM = 'mac-x64'
-# PATH = '/Users/<fill in your username here>/bin/chromedriver'
-# For package and platform types, see https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json
+# PATH = '/Users/elindstr/bin/chromedriver'
 
 # Function to get local Chrome version
 def get_local_chrome_version(os_type: str) -> str:
@@ -26,7 +28,7 @@ def get_local_chrome_version(os_type: str) -> str:
         version = subprocess.check_output(command, shell=True).decode().split()[-1].strip()
     else:
         raise ValueError("Unsupported OS type")
-    print(f'Current local chrome version (full): {version}')
+    print(f'Current local chrome version: {version}')
     return version
 
 # Function to convert version string to tuple
@@ -62,16 +64,36 @@ def find_download_url(closest_match: Dict, package: str, platform: str) -> Optio
         print(f"An unexpected error occurred: {e}")
     return None
 
-# Function to extract a zip file to a specified directory
-def extract_zip(file_path: str, extract_to: str):
+# Function to extract file from zip archive
+def extract_zip_file(zip_path: str, member_path: str, extract_to: str):
     try:
-        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-            zip_ref.extractall(extract_to)
-            print(f'Sucessfully extracted to {extract_to}')
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            for member in zip_ref.namelist():
+                if member_path in member:
+                    zip_ref.extract(member, extract_to)
+                    extracted_path = os.path.join(extract_to, member)
+                    final_path = os.path.join(extract_to, os.path.basename(member))
+                    if os.path.exists(final_path):
+                        os.remove(final_path)
+                    os.rename(extracted_path, final_path)
+                    print(f'Extracted {member} to {final_path}')
+                    break
     except zipfile.BadZipFile:
         print("Error: Bad zip file.")
     except Exception as e:
         print(f"An unexpected error occurred during extraction: {e}")
+
+# Function to clean up downloaded and extracted files
+def clean_up(zip_path: str, extracted_folder: str):
+    try:
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+            print(f'Removed zip file: {zip_path}')
+        if os.path.exists(extracted_folder):
+            os.rmdir(extracted_folder)
+            print(f'Removed extracted folder: {extracted_folder}')
+    except Exception as e:
+        print(f"An unexpected error occurred during cleanup: {e}")
 
 # Main execution
 if __name__ == "__main__":
@@ -102,10 +124,13 @@ if __name__ == "__main__":
             with open(zip_path, 'wb') as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
-            print(f'Downloaded chromedriver to {zip_path}')
+            print(f'Successfully downloaded chromedriver to {zip_path}')
 
-            # Extract the downloaded zip file
-            extract_zip(zip_path, PATH)
+            # Extract the specific file from the downloaded zip file
+            extract_zip_file(zip_path, f'{PACKAGE}-{PLATFORM}/chromedriver', PATH)
+
+            # Clean up
+            clean_up(zip_path, os.path.join(PATH, f'{PACKAGE}-{PLATFORM}'))
 
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
